@@ -1,27 +1,3 @@
-"""============================================================================
-Author: Gregory Gundersen
-
-Python implementation of Bayesian online changepoint detection for a normal
-model with unknown mean parameter. For algorithm details, see
-https://github.com/gwgundersen/bocd/blob/master/bocd.py
-
-    Adams & MacKay 2007
-    "Bayesian Online Changepoint Detection"
-    https://arxiv.org/abs/0710.3742
-
-For Bayesian inference details about the Gaussian, see:
-
-    Murphy 2007
-    "Conjugate Bayesian analysis of the Gaussian distribution"
-    https://www.cs.ubc.ca/~murphyk/Papers/bayesGauss.pdf
-
-This code is associated with the following blog posts:
-
-    http://gregorygundersen.com/blog/2019/08/13/bocd/
-    http://gregorygundersen.com/blog/2020/10/20/implementing-bocd/
-    
-============================================================================"""
-
 import matplotlib.pyplot as plt
 from   matplotlib.colors import LogNorm
 import numpy as np
@@ -29,17 +5,10 @@ from   scipy.stats import norm
 from   scipy.special import logsumexp
 import pandas as pd
 
-# -----------------------------------------------------------------------------
-
 def bocd(data, model, hazard):
     """Return run length posterior using Algorithm 1 in Adams & MacKay 2007.
     """
     # 1. Initialize lower triangular matrix representing the posterior as
-    #    function of time. Model parameters are initialized in the model class.
-    #    
-    #    When we exponentiate R at the end, exp(-inf) --> 0, which is nice for
-    #    visualization.
-    #
     T           = len(data)
     log_R       = -np.inf * np.ones((T+1, T+1))
     log_R[0, 0] = 0              # log 1 == 0
@@ -79,13 +48,9 @@ def bocd(data, model, hazard):
 
         # Pass message.
         log_message = new_log_joint
-        
             
     R = np.exp(log_R)
     return R, pmean, pvar
-
-
-# -----------------------------------------------------------------------------
 
 
 class GaussianUnknownMean:
@@ -130,39 +95,21 @@ class GaussianUnknownMean:
         """
         return 1./self.prec_params + self.varx
 
-# -----------------------------------------------------------------------------
 
-def generate_data(varx, mean0, var0, T, cp_prob):
-    """Generate partitioned data of T observations according to constant
-    changepoint probability `cp_prob` with hyperpriors `mean0` and `prec0`.
-    """
-    data  = []
-    cps   = []
-    meanx = mean0
-    for t in range(0, T):
-        if np.random.random() < cp_prob:
-            meanx = np.random.normal(mean0, var0)
-            cps.append(t)
-        data.append(np.random.normal(meanx, varx))
-    return data, cps
+def plot_posterior(T, data, min_max, cps, R, cp_10):
+    fig, axes = plt.subplots(3, 1, figsize=(20,10))
 
-
-# -----------------------------------------------------------------------------
-
-def plot_posterior(T, data,  cps, R, cp_10):
-    fig, axes = plt.subplots(2, 1, figsize=(20,10))
-
-    ax1, ax2 = axes
+    ax1, ax3, ax2 = axes
 
     ax1.scatter(range(0, T), data, s =5)
     ax1.plot(range(0, T), data)
     ax1.set_xlim([0, T])
     ax1.margins(0)
     
-    ax1.plot(range(0, T), pmean, c='k')
+    ax3.plot(range(0, T), pmean, c='k')
     _2std = 2 * np.sqrt(pvar)
-    ax1.plot(range(0, T), pmean - _2std, c='k', ls='--')
-    ax1.plot(range(0, T), pmean + _2std, c='k', ls='--')
+    ax3.plot(range(0, T), pmean - _2std, c='k', ls='--')
+    ax3.plot(range(0, T), pmean + _2std, c='k', ls='--')
 
     ax2.imshow(np.rot90(R), aspect='auto', cmap='gray_r', 
                norm=LogNorm(vmin=0.0001, vmax=1))
@@ -171,6 +118,7 @@ def plot_posterior(T, data,  cps, R, cp_10):
 
     for cp in cps:
         ax1.axvline(cp, c='red', ls='dotted', label='Actual CP')
+        ax3.axvline(cp, c='red', ls='dotted', label='Actual CP')
      
     for cp in cp_10:
         ax2.axvline(cp, c='purple', ls='dotted', lw=1)
@@ -180,7 +128,9 @@ def plot_posterior(T, data,  cps, R, cp_10):
     by_label = dict(zip(labels, handles))  # 중복 라벨 제거
     # ax1.legend(by_label.values(), by_label.keys())
     ax2.legend(by_label.values(), by_label.keys(), loc = 'center right')
-    
+    ax3.scatter(range(0, T), min_max, s=5)
+    ax3.plot(range(0, T), min_max)
+    ax3.set_xlim([0, T])
     plt.tight_layout()
     plt.show()
 
@@ -191,24 +141,22 @@ if __name__ == '__main__':
     T      = 1000   # Number of observations.
     hazard = 1/250  # Constant prior on changepoint probability.
     # mean0  = 0      # The prior mean on the mean parameter.
-    var0   = 2/400000      # The prior variance for mean parameter.
-    varx   = 1/400000      # The known variance of the data.
+    var0   = 2/400      # The prior variance for mean parameter.
+    varx   = 1/400      # The known variance of the data.
 
-    # data, cps      = generate_data(varx, mean0, var0, T, hazard)
-    
     # 파일 로드
     file_path = 'train_usd_isk.csv'
     df = pd.read_csv(file_path)
     T = len(df)
-    # 'Close' 열에서 데이터를 가져옵니다.
     data = df['Exchange rate'].values
-    mean0 = data[0]
-    # 'label' 열에서 값이 1인 인덱스를 추출합니다.
+    min_max = (data - data.min()) / (data.max() - data.min())
+    mean0 = min_max[0]
+    
     cps = df[df['label'] != 0].index.tolist()
 
     print("real_cp", cps)
     model          = GaussianUnknownMean(mean0, var0, varx)
-    R, pmean, pvar = bocd(data, model, hazard)
+    R, pmean, pvar = bocd(min_max, model, hazard)
     
     # CP 출력하기 
     cp = []
@@ -237,7 +185,6 @@ if __name__ == '__main__':
     print("pred_cp_2", cp_2)
     print("pred_cp_3", cp_3)
     print("pred_cp_10", cp_10)
-    
-    # plt.plot(R[1:,0])
-    plot_posterior(T, data, cps, R, cp_10)
+
+    plot_posterior(T, data, min_max, cps, R, cp_10)
     
