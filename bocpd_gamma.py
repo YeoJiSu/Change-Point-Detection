@@ -1,27 +1,3 @@
-"""============================================================================
-Author: Gregory Gundersen
-
-Python implementation of Bayesian online changepoint detection for a normal
-model with unknown mean parameter. For algorithm details, see
-https://github.com/gwgundersen/bocd/blob/master/bocd.py
-
-    Adams & MacKay 2007
-    "Bayesian Online Changepoint Detection"
-    https://arxiv.org/abs/0710.3742
-
-For Bayesian inference details about the Gaussian, see:
-
-    Murphy 2007
-    "Conjugate Bayesian analysis of the Gaussian distribution"
-    https://www.cs.ubc.ca/~murphyk/Papers/bayesGauss.pdf
-
-This code is associated with the following blog posts:
-
-    http://gregorygundersen.com/blog/2019/08/13/bocd/
-    http://gregorygundersen.com/blog/2020/10/20/implementing-bocd/
-    
-============================================================================"""
-
 import matplotlib.pyplot as plt
 from   matplotlib.colors import LogNorm
 import numpy as np
@@ -44,7 +20,7 @@ def bocd(data, model, hazard):
     for t in range(1, T+1):
         x = data[t-1]
         if x == 0:
-            x = x + 0.00001
+            x = x + 0.0000001
 
         # Evaluate predictive probabilities.
         log_pis = model.log_pred_prob(t, x)
@@ -91,18 +67,10 @@ class GammaModel:
 
     def update_params(self, t, x):
         """Update the parameters of the Gamma distribution upon observing a new datum."""
-        new_alpha_params = self.alpha_params + 0.3  # Update alpha by adding 1 for each observation
-        new_beta_params = self.beta_params + x   # Update beta by adding the new data point
+        new_alpha_params = self.alpha_params + x  # Update alpha by adding 1 for each observation
+        new_beta_params = self.beta_params + (1-x)   # Update beta by adding the new data point
         self.alpha_params = np.append([self.alpha0], new_alpha_params)
         self.beta_params = np.append([self.beta0], new_beta_params)
-# -----------------------------------------------------------------------------
-
-def calculate_returns(data):
-    """Calculate returns from price data."""
-    returns = 1 + np.diff(data) / data[:-1]
-    # returns = np.log(1 + returns)  # log(1 + return) to handle negative and zero returns
-    return np.append([1], returns)  # Append a 0 for the first return to maintain length
-
 
 # -----------------------------------------------------------------------------
 
@@ -138,34 +106,29 @@ def plot_posterior(T, data, returns, cps, R, cp_10):
     ax3.set_xlim([0, T])
     plt.tight_layout()
     plt.show()
+    
 
 
 # -----------------------------------------------------------------------------
 
 if __name__ == '__main__':
-    file_path = 'train_apple.csv'
+    file_path = 'train_usd_isk.csv'
     df = pd.read_csv(file_path)
-    data = df['Close'].values
+    data = df['Exchange rate'].values
 
-    # # Calculate returns
-    # returns = calculate_returns(data)
-    
     # Min-Max Scaling 수행
-    returns = (data - data.min()) / (data.max() - data.min())
+    min_max = (data - data.min()) / (data.max() - data.min())
 
+    print(np.mean(min_max)) # 1.00 = α/β
     
-    # returns = data
-    print(np.mean(returns)) # 1.00 = α/β
-    
-    T = len(returns)
+    T = len(min_max)
     
     beta0 = 1 # 데이터의 평균이 1 근처라고 가정할 경우, α/β=1이 되도록 설정할 수 있습니다.
-    alpha0 = beta0 * np.mean(returns)
-    
+    alpha0 = beta0 * np.mean(min_max)
     hazard = 1/250
 
     model = GammaModel(alpha0, beta0)
-    R = bocd(returns, model, hazard)
+    R = bocd(min_max, model, hazard)
     
     
     # 'label' 열에서 값이 1인 인덱스를 추출합니다.
@@ -190,8 +153,8 @@ if __name__ == '__main__':
             cp_2.append(t-2)
         if R[t, 3] == np.max(R[t, :]):
             cp_3.append(t-3)
-        if R[t, 20] == np.max(R[t, :]):
-            cp_10.append(t-20)
+        if R[t, 10] == np.max(R[t, :]):
+            cp_10.append(t-10)
             
 
     # 최종 cp 배열 출력
@@ -202,7 +165,7 @@ if __name__ == '__main__':
     print("pred_cp_10", cp_10)
     
     # plt.plot(R[1:,0])
-    plot_posterior(T, data,returns, cps, R, cp_10)
+    plot_posterior(T, data,min_max, cps, R, cp_10)
     
     
     
