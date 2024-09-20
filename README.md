@@ -2,6 +2,11 @@
 
 ## CPD Algorithm 
 
+### 🔗 Statistical Matrix
+* Mean Change
+* Standard deviation Change
+* Slope Change
+
 ### 🔗 BOCPD
 * The paper of BOCPD: [paper link](https://arxiv.org/abs/0710.3742)
 * Understanding BOCPD paper: [BOCPD Review](https://even-hickory-474.notion.site/Version-2-Understanding-BOCPD-Applying-BOCPD-to-Financial-Data-e8bfd604f9774924b99c7cf52a1d1ac1?pvs=4)
